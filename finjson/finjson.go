@@ -1,22 +1,20 @@
-package main
+package finjson
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/joho/godotenv"
 	"io/ioutil"
-	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
 
-type dateOnly struct {
+type DateOnly struct {
 	time.Time
 }
 
-func (t *dateOnly) UnmarshalJSON(buf []byte) error {
+func (t *DateOnly) UnmarshalJSON(buf []byte) error {
 	tt, err := time.Parse("2006-01-02", strings.Trim(string(buf), `"`))
 	if err != nil {
 		return err
@@ -25,14 +23,14 @@ func (t *dateOnly) UnmarshalJSON(buf []byte) error {
 	return nil
 }
 
-type Data struct {
+type JsonData struct {
 	Dataset Dataset `json:"dataset"`
 }
 
 type Dataset struct {
 	MetaData
-	StartDate dateOnly    `json:"start_date"`
-	EndDate   dateOnly    `json:"end_date"`
+	StartDate DateOnly    `json:"start_date"`
+	EndDate   DateOnly    `json:"end_date"`
 	PriceData []PriceData `json:"data"`
 }
 
@@ -44,12 +42,12 @@ type MetaData struct {
 	Frequency           string    `json:"frequency"`
 	Type                string    `json:"type"`
 	RefreshedAt         time.Time `json:"refreshed_at"`
-	NewestAvailableDate dateOnly  `json:"newest_available_date"`
-	OldestAvailableDate dateOnly  `json:"oldest_available_date"`
+	NewestAvailableDate DateOnly  `json:"newest_available_date"`
+	OldestAvailableDate DateOnly  `json:"oldest_available_date"`
 }
 
 type PriceData struct {
-	Date  dateOnly
+	Date  DateOnly
 	Price float64
 }
 
@@ -62,43 +60,38 @@ func (p *PriceData) UnmarshalJSON(data []byte) error {
 	p.Date.UnmarshalJSON([]byte(strings.Trim(slicedData[0].(string), `"`)))
 
 	p.Price = slicedData[1].(float64)
-	
+
 	return nil
 
 }
 
-func init() {
-	if err := godotenv.Load(); err != nil {
-		panic("No .env file found")
-	}
+type FinJson struct {
+	ApiKey string
 }
 
-func main() {
+func (fj *FinJson) ParseJson(datasetName string, ticker string, startDate string, endDate string) (*JsonData, error) {
+	var (
+		err error
 
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Something went wrong in the main function. Please contact hizkiaadrians@gmail.com for fix")
-		}
-	}()
+		req *http.Request
+		res *http.Response
+	)
 
-	var url string
+	url := fmt.Sprintf("https://www.quandl.com/api/v3/datasets/%s/%s.json", datasetName, ticker)
 
-	if quandlApiKey, exists := os.LookupEnv("QUANDL_API_KEY"); exists {
-		url = fmt.Sprintf("https://www.quandl.com/api/v3/datasets/OPEC/ORB.json?api_key=%s", quandlApiKey)
-	} else {
-		panic("Cannot find Quandl API key")
-	}
+	httpClient := http.Client{Timeout: time.Second * 2}
 
-	quandlClient := http.Client{Timeout: time.Second * 2}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err = http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+	req.URL.Query().Add("start_date", startDate)
+	req.URL.Query().Add("end_date", endDate)
+	req.URL.Query().Add("api_key", (*fj).ApiKey)
 
-	res, err := quandlClient.Do(req)
+	res, err = httpClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	if res.Body != nil {
@@ -107,14 +100,18 @@ func main() {
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	var datasets Data
+	var datasets JsonData
 	err = json.Unmarshal(body, &datasets)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	fmt.Printf("%s", res.Status)
+	if len(datasets.Dataset.DatasetCode) == 0 {
+		return nil, errors.New("Data not available. Please ensure that ticker symbol is valid, and that the dates are in YYYY-MM-DD")
+	}
+
+	return &datasets, nil
 }
