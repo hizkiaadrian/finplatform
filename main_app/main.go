@@ -1,11 +1,12 @@
 package main
 
 import (
-	"finplatform/finjson"
+	"finplatform/datareader"
 	"fmt"
 	"github.com/joho/godotenv"
 	"os"
 	"time"
+	"strings"
 )
 
 func MakeDateString(year int, month time.Month, day int) string {
@@ -20,16 +21,31 @@ func main() {
 
 	apiKey := os.Getenv("QUANDL_API_KEY")
 
-	finJson := &finjson.FinJson{ApiKey: apiKey}
+	var apiConsumer datareader.ApiConsumer
+	apiConsumer = new(datareader.JsonApiConsumer)
+	apiConsumer.SetApiKey(apiKey)
 
-	data, err := finJson.ParseJson("OPEC", "ORB", "2010-01-01", "2020-01-01")
+	d, err := apiConsumer.FetchData("OPEC", "ORB", "2010-01-01", "2020-01-01")
 	if err != nil {
 		panic(err)
 	}
+	data := d.(datareader.Dataset)
 
-	meta := data.Dataset.MetaData
+	apiConsumer = new(datareader.CsvApiConsumer)
+	apiConsumer.SetApiKey(apiKey)
+	c, err := apiConsumer.FetchData("WIKI", "AAPL", "2010-01-01", "2020-01-01")
+	if err != nil {
+		panic(err)
+	}
+	csv := c.([]string)
+
+	for _, s := range strings.Split(csv[0],`,`) {
+		fmt.Println(s)
+	}
+
+	meta := data.MetaData
 	fmt.Printf("Data Summary:\nTicker: %s\nDataset: %s\nStart Date: %s\nEnd Date: %s\n",
 	 meta.DatasetCode, meta.DatabaseCode,
-	  MakeDateString(data.Dataset.StartDate.Date()),
-	   MakeDateString(data.Dataset.EndDate.Date()))
+	  MakeDateString(data.StartDate.Date()),
+	   MakeDateString(data.EndDate.Date()))
 }
