@@ -85,9 +85,12 @@ func (fj *FinJson) ParseJson(datasetName string, ticker string, startDate string
 	if err != nil {
 		return nil, err
 	}
-	req.URL.Query().Add("start_date", startDate)
-	req.URL.Query().Add("end_date", endDate)
-	req.URL.Query().Add("api_key", (*fj).ApiKey)
+
+	q := req.URL.Query()
+	q.Add("start_date", startDate)
+	q.Add("end_date", endDate)
+	q.Add("api_key", (*fj).ApiKey)
+	req.URL.RawQuery = q.Encode()
 
 	res, err = httpClient.Do(req)
 	if err != nil {

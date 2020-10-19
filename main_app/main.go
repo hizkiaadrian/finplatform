@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"github.com/joho/godotenv"
 	"os"
+	"time"
 )
+
+func MakeDateString(year int, month time.Month, day int) string {
+	return fmt.Sprintf("%d %s %d", day, month.String(), year)
+}
 
 func main() {
 	err := godotenv.Load()
@@ -17,11 +22,14 @@ func main() {
 
 	finJson := &finjson.FinJson{ApiKey: apiKey}
 
-	test, err := finJson.ParseJson("OPEC", "ORB", "", "")
+	data, err := finJson.ParseJson("OPEC", "ORB", "2010-01-01", "2020-01-01")
 	if err != nil {
 		panic(err)
 	}
 
-	i := test.Dataset.MetaData
-	fmt.Printf("Data for ticker %s from %s dataset loaded succesfully", i.DatasetCode, i.DatabaseCode)
+	meta := data.Dataset.MetaData
+	fmt.Printf("Data Summary:\nTicker: %s\nDataset: %s\nStart Date: %s\nEnd Date: %s\n",
+	 meta.DatasetCode, meta.DatabaseCode,
+	  MakeDateString(data.Dataset.StartDate.Date()),
+	   MakeDateString(data.Dataset.EndDate.Date()))
 }
